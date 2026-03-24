@@ -2,7 +2,9 @@ import type { InputState } from "./input";
 import type { Level } from "./level";
 import {
 	type GameState,
+	DJUMP_SPEED,
 	GRAVITY,
+	JUMP_RELEASE_DAMPEN,
 	JUMP_SPEED,
 	MAX_FALL_SPEED,
 	MOVE_SPEED,
@@ -47,18 +49,23 @@ export function updatePlayer(state: GameState, input: InputState, level: Level):
 
 	// Jump (on justPressed only)
 	if (input.jumpPressed && p.jumpsLeft > 0) {
-		p.vy = JUMP_SPEED;
+		const isFirstJump = p.jumpsLeft === 2;
+		p.vy = isFirstJump ? JUMP_SPEED : DJUMP_SPEED;
 		p.jumpsLeft--;
 		p.onGround = false;
 	}
 
-	// Gravity
-	p.vy += GRAVITY;
-	if (p.vy > MAX_FALL_SPEED) p.vy = MAX_FALL_SPEED;
+	// Jump release: cut upward speed by 55%
+	if (!input.jump && p.vy < 0) {
+		p.vy *= JUMP_RELEASE_DAMPEN;
+	}
 
-	// Apply vertical movement + collision
+	// Move then gravity (GM order: position update before gravity)
 	p.y += p.vy;
 	resolveVerticalCollision(p, level);
+
+	p.vy += GRAVITY;
+	if (p.vy > MAX_FALL_SPEED) p.vy = MAX_FALL_SPEED;
 
 	// Walked off ledge without jumping: only 1 airborne jump remains
 	if (wasOnGround && !p.onGround && p.jumpsLeft === 2) {

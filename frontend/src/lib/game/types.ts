@@ -8,6 +8,8 @@ export const SCREEN_HEIGHT = TILE_SIZE * GRID_ROWS; // 608
 // Physics constants (iwanna standard, per frame at 50fps)
 export const GRAVITY = 0.4;
 export const JUMP_SPEED = -8.5;
+export const DJUMP_SPEED = -7.0;
+export const JUMP_RELEASE_DAMPEN = 0.45;
 export const MOVE_SPEED = 3;
 export const MAX_FALL_SPEED = 9;
 

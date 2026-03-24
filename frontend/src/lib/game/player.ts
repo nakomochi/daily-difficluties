@@ -1,8 +1,8 @@
 import type { InputState } from "./input";
 import type { Level } from "./level";
 import {
-	type GameState,
 	DJUMP_SPEED,
+	type GameState,
 	GRAVITY,
 	JUMP_RELEASE_DAMPEN,
 	JUMP_SPEED,

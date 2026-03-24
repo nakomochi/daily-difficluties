@@ -1,20 +1,17 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { Engine } from "./engine";
-import type { StageData } from "./types";
-import { SCREEN_HEIGHT, SCREEN_WIDTH } from "./types";
+import { SCREEN_HEIGHT, SCREEN_WIDTH, type StageData } from "./types";
 
 let { stageData }: { stageData: StageData } = $props();
 
 let canvas: HTMLCanvasElement;
 let container: HTMLDivElement;
-let engine: Engine | null = null;
 
 function updateScale() {
 	if (!container || !canvas) return;
-	const parent = container;
-	const scaleX = parent.clientWidth / SCREEN_WIDTH;
-	const scaleY = parent.clientHeight / SCREEN_HEIGHT;
+	const scaleX = container.clientWidth / SCREEN_WIDTH;
+	const scaleY = container.clientHeight / SCREEN_HEIGHT;
 	const scale = Math.min(scaleX, scaleY);
 	canvas.style.width = `${SCREEN_WIDTH * scale}px`;
 	canvas.style.height = `${SCREEN_HEIGHT * scale}px`;
@@ -29,8 +26,6 @@ function toggleFullscreen() {
 }
 
 onMount(() => {
-	engine = new Engine(canvas, stageData);
-	engine.start();
 	updateScale();
 
 	const observer = new ResizeObserver(updateScale);
@@ -45,10 +40,16 @@ onMount(() => {
 	window.addEventListener("keydown", onKeydown);
 
 	return () => {
-		engine?.stop();
 		observer.disconnect();
 		window.removeEventListener("keydown", onKeydown);
 	};
+});
+
+$effect(() => {
+	if (!canvas) return;
+	const e = new Engine(canvas, stageData);
+	e.start();
+	return () => e.stop();
 });
 </script>
 

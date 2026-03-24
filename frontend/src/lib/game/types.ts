@@ -60,3 +60,9 @@ export interface GameState {
 }
 
 export type StageData = number[][];
+
+export interface StageDef {
+	id: string;
+	name: string;
+	data: StageData;
+}

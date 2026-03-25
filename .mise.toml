@@ -9,22 +9,22 @@ description = "Start DB, backend, and frontend"
 
 [tasks.dev-db]
 run = """
-docker start wordle-db 2>/dev/null || \
-docker run -d --name wordle-db \
+docker start dd-db 2>/dev/null || \
+docker run -d --name dd-db \
   -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=wordle \
+  -e POSTGRES_DB=daily_difficulties \
   -p 5432:5432 \
   postgres:16
 echo "Waiting for PostgreSQL..."
-until docker exec wordle-db pg_isready -U postgres > /dev/null 2>&1; do sleep 0.5; done
+until docker exec dd-db pg_isready -U postgres > /dev/null 2>&1; do sleep 0.5; done
 echo "PostgreSQL is ready"
 """
 description = "Start PostgreSQL container"
 
 [tasks.db-setup]
 run = """
-docker exec -i wordle-db psql -U postgres -d wordle < backend/sql/schema.sql
-docker exec -i wordle-db psql -U postgres -d wordle < backend/sql/seed.sql
+docker exec -i dd-db psql -U postgres -d daily_difficulties < backend/sql/schema.sql
+docker exec -i dd-db psql -U postgres -d daily_difficulties < backend/sql/seed.sql
 """
 depends = ["dev-db"]
 description = "Apply schema and seed data"

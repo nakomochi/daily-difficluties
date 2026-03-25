@@ -1,10 +1,23 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"web-go-template/internal/db"
+)
+
+const (
+	gridRows = 19
+	gridCols = 25
+	maxTile  = 8
 )
 
 type Handler struct {
@@ -15,146 +28,230 @@ func New(queries *db.Queries) *Handler {
 	return &Handler{queries: queries}
 }
 
-func (h *Handler) todayWord(w http.ResponseWriter, r *http.Request) (db.Word, bool) {
-	word, err := h.queries.GetTodayWord(r.Context())
+func AdminOnly(apiKey string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-API-Key")), []byte(apiKey)) != 1 {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func (h *Handler) GetTodayStage(w http.ResponseWriter, r *http.Request) {
+	stage, err := h.queries.GetTodayStage(r.Context())
 	if err != nil {
-		http.Error(w, "no word set for today", http.StatusNotFound)
-		return word, false
-	}
-	return word, true
-}
-
-func (h *Handler) GetTodayWord(w http.ResponseWriter, r *http.Request) {
-	word, ok := h.todayWord(w, r)
-	if !ok {
+		http.Error(w, "no stage set for today", http.StatusNotFound)
 		return
 	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"id":     word.ID,
-		"length": len(word.Word),
-		"date":   word.Date.Time.Format("2006-01-02"),
-	})
+	writeStageJSON(w, http.StatusOK, stage)
 }
 
-type GuessRequest struct {
-	Guess string `json:"guess"`
-}
-
-func (h *Handler) GuessWord(w http.ResponseWriter, r *http.Request) {
-	word, ok := h.todayWord(w, r)
-	if !ok {
+func (h *Handler) ListStages(w http.ResponseWriter, r *http.Request) {
+	stages, err := h.queries.ListStages(r.Context())
+	if err != nil {
+		http.Error(w, "failed to list stages", http.StatusInternalServerError)
 		return
 	}
+	if stages == nil {
+		stages = []db.ListStagesRow{}
+	}
+	writeJSON(w, http.StatusOK, stages)
+}
 
-	var req GuessRequest
+func (h *Handler) GetStage(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	stage, err := h.queries.GetStage(r.Context(), id)
+	if err != nil {
+		http.Error(w, "stage not found", http.StatusNotFound)
+		return
+	}
+	writeStageJSON(w, http.StatusOK, stage)
+}
+
+type stageRequest struct {
+	Name string      `json:"name"`
+	Data [][]float64 `json:"data"`
+}
+
+func (h *Handler) CreateStage(w http.ResponseWriter, r *http.Request) {
+	var req stageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-
-	if len(req.Guess) != len(word.Word) {
-		http.Error(w, "guess must be the same length as the word", http.StatusBadRequest)
+	if err := validateStageData(req.Data); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	result := evaluateGuess(word.Word, req.Guess)
-	correct := req.Guess == word.Word
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"result":  result,
-		"correct": correct,
+	dataJSON, _ := json.Marshal(req.Data)
+	stage, err := h.queries.CreateStage(r.Context(), db.CreateStageParams{
+		Name: req.Name,
+		Data: dataJSON,
 	})
-}
-
-type SubmitScoreRequest struct {
-	PlayerName string `json:"player_name"`
-	Attempts   int32  `json:"attempts"`
-	Solved     bool   `json:"solved"`
-}
-
-func (h *Handler) SubmitScore(w http.ResponseWriter, r *http.Request) {
-	word, ok := h.todayWord(w, r)
-	if !ok {
+	if err != nil {
+		http.Error(w, "failed to create stage", http.StatusInternalServerError)
 		return
 	}
+	writeStageJSON(w, http.StatusCreated, stage)
+}
 
-	var req SubmitScoreRequest
+func (h *Handler) UpdateStage(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req stageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-
-	score, err := h.queries.CreateScore(r.Context(), db.CreateScoreParams{
-		PlayerName: req.PlayerName,
-		WordID:     word.ID,
-		Attempts:   req.Attempts,
-		Solved:     req.Solved,
+	if err := validateStageData(req.Data); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	dataJSON, _ := json.Marshal(req.Data)
+	stage, err := h.queries.UpdateStage(r.Context(), db.UpdateStageParams{
+		ID:   id,
+		Name: req.Name,
+		Data: dataJSON,
 	})
 	if err != nil {
-		http.Error(w, "failed to save score", http.StatusInternalServerError)
+		http.Error(w, "stage not found", http.StatusNotFound)
 		return
 	}
-
-	writeJSON(w, http.StatusCreated, score)
+	writeStageJSON(w, http.StatusOK, stage)
 }
 
-func (h *Handler) GetScores(w http.ResponseWriter, r *http.Request) {
-	word, ok := h.todayWord(w, r)
-	if !ok {
-		return
-	}
-
-	scores, err := h.queries.GetScoresByWord(r.Context(), word.ID)
+func (h *Handler) DeleteStage(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
 	if err != nil {
-		http.Error(w, "failed to get scores", http.StatusInternalServerError)
+		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-
-	if scores == nil {
-		scores = []db.Score{}
+	if err := h.queries.DeleteStage(r.Context(), id); err != nil {
+		http.Error(w, "failed to delete stage (may be referenced by schedule)", http.StatusConflict)
+		return
 	}
-
-	writeJSON(w, http.StatusOK, scores)
+	w.WriteHeader(http.StatusNoContent)
 }
 
-// evaluateGuess returns a slice of hints for each character.
-// "correct" = right letter, right position
-// "present" = right letter, wrong position
-// "absent"  = letter not in word
-func evaluateGuess(answer, guess string) []string {
-	answerRunes := []rune(answer)
-	guessRunes := []rune(guess)
-	n := len(answerRunes)
-	result := make([]string, n)
-	used := make([]bool, n)
+func (h *Handler) AssignStageToDate(w http.ResponseWriter, r *http.Request) {
+	date, err := parseDate(r)
+	if err != nil {
+		http.Error(w, "invalid date format (use YYYY-MM-DD)", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		StageID int32 `json:"stage_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.StageID <= 0 {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := h.queries.AssignStageToDate(r.Context(), db.AssignStageToDateParams{
+		Date:    date,
+		StageID: req.StageID,
+	}); err != nil {
+		http.Error(w, "failed to assign stage", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	for i := 0; i < n; i++ {
-		if guessRunes[i] == answerRunes[i] {
-			result[i] = "correct"
-			used[i] = true
-		}
+func (h *Handler) UnassignDate(w http.ResponseWriter, r *http.Request) {
+	date, err := parseDate(r)
+	if err != nil {
+		http.Error(w, "invalid date format (use YYYY-MM-DD)", http.StatusBadRequest)
+		return
+	}
+	if err := h.queries.UnassignDate(r.Context(), date); err != nil {
+		http.Error(w, "failed to unassign date", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) ListSchedule(w http.ResponseWriter, r *http.Request) {
+	schedule, err := h.queries.ListSchedule(r.Context())
+	if err != nil {
+		http.Error(w, "failed to list schedule", http.StatusInternalServerError)
+		return
+	}
+	if schedule == nil {
+		schedule = []db.ListScheduleRow{}
 	}
 
-	for i := 0; i < n; i++ {
-		if result[i] == "correct" {
-			continue
+	type scheduleEntry struct {
+		Date    string `json:"date"`
+		StageID int32  `json:"stage_id"`
+		Name    string `json:"name"`
+	}
+	entries := make([]scheduleEntry, len(schedule))
+	for i, s := range schedule {
+		entries[i] = scheduleEntry{
+			Date:    s.Date.Time.Format("2006-01-02"),
+			StageID: s.StageID,
+			Name:    s.Name,
 		}
-		found := false
-		for j := 0; j < n; j++ {
-			if !used[j] && guessRunes[i] == answerRunes[j] {
-				result[i] = "present"
-				used[j] = true
-				found = true
-				break
+	}
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func parseID(r *http.Request) (int32, error) {
+	n, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		return 0, err
+	}
+	return int32(n), nil
+}
+
+func parseDate(r *http.Request) (pgtype.Date, error) {
+	s := chi.URLParam(r, "date")
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return pgtype.Date{}, err
+	}
+	return pgtype.Date{Time: t, Valid: true}, nil
+}
+
+func validateStageData(data [][]float64) error {
+	if len(data) != gridRows {
+		return fmt.Errorf("data must have %d rows, got %d", gridRows, len(data))
+	}
+	for i, row := range data {
+		if len(row) != gridCols {
+			return fmt.Errorf("row %d must have %d cols, got %d", i, gridCols, len(row))
+		}
+		for _, v := range row {
+			iv := int(v)
+			if float64(iv) != v || iv < 0 || iv > maxTile {
+				return fmt.Errorf("tile values must be integers 0-%d", maxTile)
 			}
 		}
-		if !found {
-			result[i] = "absent"
-		}
 	}
+	return nil
+}
 
-	return result
+type stageResponse struct {
+	ID   int32           `json:"id"`
+	Name string          `json:"name"`
+	Data json.RawMessage `json:"data"`
+}
+
+func writeStageJSON(w http.ResponseWriter, status int, s db.Stage) {
+	writeJSON(w, status, stageResponse{
+		ID:   s.ID,
+		Name: s.Name,
+		Data: s.Data,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -162,3 +259,4 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
 }
+

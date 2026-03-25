@@ -7,6 +7,7 @@ import TilePalette from "$lib/game/editor/TilePalette.svelte";
 import { TILE_BY_KEY } from "$lib/game/editor/tile-palette-data";
 import Game from "$lib/game/Game.svelte";
 
+let { data } = $props();
 let mode: "edit" | "playtest" = $state("edit");
 const editorState = new EditorState();
 
@@ -51,7 +52,7 @@ onMount(() => {
 
 {#if mode === "edit"}
 	<div class="editor-layout">
-		<EditorToolbar {editorState} onPlaytest={startPlaytest} />
+		<EditorToolbar {editorState} onPlaytest={startPlaytest} dbStages={data.dbStages} schedule={data.schedule} />
 		<div class="editor-main">
 			<aside class="editor-sidebar">
 				<TilePalette {editorState} />

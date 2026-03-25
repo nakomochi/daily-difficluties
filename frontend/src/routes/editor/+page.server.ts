@@ -1,6 +1,6 @@
-import { error } from "@sveltejs/kit";
-import { dev } from "$app/environment";
+import { loadSchedule, loadStageList } from "$lib/server/api";
 
-export function load() {
-	if (!dev) error(404);
+export async function load({ fetch }) {
+	const [dbStages, schedule] = await Promise.all([loadStageList(fetch), loadSchedule(fetch)]);
+	return { dbStages, schedule };
 }

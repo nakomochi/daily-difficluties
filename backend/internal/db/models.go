@@ -8,17 +8,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Score struct {
-	ID         int32              `json:"id"`
-	PlayerName string             `json:"player_name"`
-	WordID     int32              `json:"word_id"`
-	Attempts   int32              `json:"attempts"`
-	Solved     bool               `json:"solved"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+type DailyStage struct {
+	Date      pgtype.Date        `json:"date"`
+	StageID   int32              `json:"stage_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-type Word struct {
-	ID   int32       `json:"id"`
-	Word string      `json:"word"`
-	Date pgtype.Date `json:"date"`
+type Stage struct {
+	ID        int32              `json:"id"`
+	Name      string             `json:"name"`
+	Data      []byte             `json:"data"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

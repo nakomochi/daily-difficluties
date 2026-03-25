@@ -3,6 +3,11 @@ import { GRID_COLS, GRID_ROWS, type StageData, Tile } from "../types";
 import { cloneGrid, History } from "./history.svelte";
 import { EXPORT_NAME_BY_TILE } from "./tile-palette-data";
 
+export interface DbStageSummary {
+	id: number;
+	name: string;
+}
+
 function isBorder(col: number, row: number): boolean {
 	return row === 0 || row === GRID_ROWS - 1 || col === 0 || col === GRID_COLS - 1;
 }
@@ -33,6 +38,8 @@ export class EditorState {
 	createNew(): void {
 		this.history.pushSnapshot(this.tiles);
 		this.tiles = createEmptyStage();
+		this.currentDbId = null;
+		this.currentName = "";
 	}
 
 	loadStage(index: number): void {
@@ -40,6 +47,8 @@ export class EditorState {
 		if (!stage) return;
 		this.history.pushSnapshot(this.tiles);
 		this.tiles = cloneGrid(stage.data);
+		this.currentDbId = null;
+		this.currentName = stage.name ?? stage.id;
 	}
 
 	placeTile(col: number, row: number): void {
@@ -117,5 +126,50 @@ export class EditorState {
 
 		const output = `{\n\t\tid: "custom-stage",\n\t\tdata: [\n${lines.join("\n")}\n\t\t],\n\t},`;
 		console.log(output);
+	}
+
+	currentDbId: number | null = $state(null);
+	currentName: string = $state("");
+
+	private async sendStage(method: string, url: string): Promise<{ id: number } | null> {
+		try {
+			const res = await fetch(url, {
+				method,
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name: this.currentName, data: this.tiles }),
+			});
+			if (!res.ok) return null;
+			const result = await res.json();
+			this.currentDbId = result.id;
+			return result;
+		} catch {
+			return null;
+		}
+	}
+
+	async saveToServer(): Promise<{ id: number } | null> {
+		if (this.currentDbId) {
+			return this.sendStage("PUT", `/api/stages/${this.currentDbId}`);
+		}
+		return this.saveAsNew();
+	}
+
+	async saveAsNew(): Promise<{ id: number } | null> {
+		return this.sendStage("POST", "/api/stages");
+	}
+
+	async loadFromServer(id: number): Promise<boolean> {
+		try {
+			const res = await fetch(`/api/stages/${id}`);
+			if (!res.ok) return false;
+			const stage = await res.json();
+			this.history.pushSnapshot(this.tiles);
+			this.tiles = cloneGrid(stage.data);
+			this.currentDbId = stage.id;
+			this.currentName = stage.name ?? "";
+			return true;
+		} catch {
+			return false;
+		}
 	}
 }

@@ -11,90 +11,165 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createScore = `-- name: CreateScore :one
-INSERT INTO scores (player_name, word_id, attempts, solved)
-VALUES ($1, $2, $3, $4) RETURNING id, player_name, word_id, attempts, solved, created_at
+const assignStageToDate = `-- name: AssignStageToDate :exec
+INSERT INTO daily_stages (date, stage_id) VALUES ($1, $2)
+ON CONFLICT (date) DO UPDATE SET stage_id = EXCLUDED.stage_id
 `
 
-type CreateScoreParams struct {
-	PlayerName string `json:"player_name"`
-	WordID     int32  `json:"word_id"`
-	Attempts   int32  `json:"attempts"`
-	Solved     bool   `json:"solved"`
+type AssignStageToDateParams struct {
+	Date    pgtype.Date `json:"date"`
+	StageID int32       `json:"stage_id"`
 }
 
-func (q *Queries) CreateScore(ctx context.Context, arg CreateScoreParams) (Score, error) {
-	row := q.db.QueryRow(ctx, createScore,
-		arg.PlayerName,
-		arg.WordID,
-		arg.Attempts,
-		arg.Solved,
-	)
-	var i Score
+func (q *Queries) AssignStageToDate(ctx context.Context, arg AssignStageToDateParams) error {
+	_, err := q.db.Exec(ctx, assignStageToDate, arg.Date, arg.StageID)
+	return err
+}
+
+const createStage = `-- name: CreateStage :one
+INSERT INTO stages (name, data) VALUES ($1, $2) RETURNING id, name, data, created_at, updated_at
+`
+
+type CreateStageParams struct {
+	Name string `json:"name"`
+	Data []byte `json:"data"`
+}
+
+func (q *Queries) CreateStage(ctx context.Context, arg CreateStageParams) (Stage, error) {
+	row := q.db.QueryRow(ctx, createStage, arg.Name, arg.Data)
+	var i Stage
 	err := row.Scan(
 		&i.ID,
-		&i.PlayerName,
-		&i.WordID,
-		&i.Attempts,
-		&i.Solved,
+		&i.Name,
+		&i.Data,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const createWord = `-- name: CreateWord :one
-INSERT INTO words (word, date) VALUES ($1, $2) RETURNING id, word, date
+const deleteStage = `-- name: DeleteStage :exec
+DELETE FROM stages WHERE id = $1
 `
 
-type CreateWordParams struct {
-	Word string      `json:"word"`
-	Date pgtype.Date `json:"date"`
+func (q *Queries) DeleteStage(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteStage, id)
+	return err
 }
 
-func (q *Queries) CreateWord(ctx context.Context, arg CreateWordParams) (Word, error) {
-	row := q.db.QueryRow(ctx, createWord, arg.Word, arg.Date)
-	var i Word
-	err := row.Scan(&i.ID, &i.Word, &i.Date)
+const getStage = `-- name: GetStage :one
+SELECT id, name, data, created_at, updated_at FROM stages WHERE id = $1
+`
+
+func (q *Queries) GetStage(ctx context.Context, id int32) (Stage, error) {
+	row := q.db.QueryRow(ctx, getStage, id)
+	var i Stage
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Data,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
-const getScoresByPlayer = `-- name: GetScoresByPlayer :many
-SELECT s.id, s.player_name, s.word_id, s.attempts, s.solved, s.created_at, w.word, w.date
-FROM scores s
-JOIN words w ON s.word_id = w.id
-WHERE s.player_name = $1
-ORDER BY w.date DESC
+const getStageByDate = `-- name: GetStageByDate :one
+SELECT s.id, s.name, s.data, s.created_at, s.updated_at FROM stages s
+JOIN daily_stages ds ON ds.stage_id = s.id
+WHERE ds.date = $1
 `
 
-type GetScoresByPlayerRow struct {
-	ID         int32              `json:"id"`
-	PlayerName string             `json:"player_name"`
-	WordID     int32              `json:"word_id"`
-	Attempts   int32              `json:"attempts"`
-	Solved     bool               `json:"solved"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	Word       string             `json:"word"`
-	Date       pgtype.Date        `json:"date"`
+func (q *Queries) GetStageByDate(ctx context.Context, date pgtype.Date) (Stage, error) {
+	row := q.db.QueryRow(ctx, getStageByDate, date)
+	var i Stage
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Data,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
-func (q *Queries) GetScoresByPlayer(ctx context.Context, playerName string) ([]GetScoresByPlayerRow, error) {
-	rows, err := q.db.Query(ctx, getScoresByPlayer, playerName)
+const getTodayStage = `-- name: GetTodayStage :one
+SELECT s.id, s.name, s.data, s.created_at, s.updated_at FROM stages s
+JOIN daily_stages ds ON ds.stage_id = s.id
+WHERE ds.date = CURRENT_DATE
+`
+
+func (q *Queries) GetTodayStage(ctx context.Context) (Stage, error) {
+	row := q.db.QueryRow(ctx, getTodayStage)
+	var i Stage
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Data,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listSchedule = `-- name: ListSchedule :many
+SELECT ds.date, ds.stage_id, s.name
+FROM daily_stages ds
+JOIN stages s ON s.id = ds.stage_id
+ORDER BY ds.date
+`
+
+type ListScheduleRow struct {
+	Date    pgtype.Date `json:"date"`
+	StageID int32       `json:"stage_id"`
+	Name    string      `json:"name"`
+}
+
+func (q *Queries) ListSchedule(ctx context.Context) ([]ListScheduleRow, error) {
+	rows, err := q.db.Query(ctx, listSchedule)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetScoresByPlayerRow
+	var items []ListScheduleRow
 	for rows.Next() {
-		var i GetScoresByPlayerRow
+		var i ListScheduleRow
+		if err := rows.Scan(&i.Date, &i.StageID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStages = `-- name: ListStages :many
+SELECT id, name, created_at, updated_at FROM stages ORDER BY id
+`
+
+type ListStagesRow struct {
+	ID        int32              `json:"id"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListStages(ctx context.Context) ([]ListStagesRow, error) {
+	rows, err := q.db.Query(ctx, listStages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListStagesRow
+	for rows.Next() {
+		var i ListStagesRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.PlayerName,
-			&i.WordID,
-			&i.Attempts,
-			&i.Solved,
+			&i.Name,
 			&i.CreatedAt,
-			&i.Word,
-			&i.Date,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -106,79 +181,34 @@ func (q *Queries) GetScoresByPlayer(ctx context.Context, playerName string) ([]G
 	return items, nil
 }
 
-const getScoresByWord = `-- name: GetScoresByWord :many
-SELECT id, player_name, word_id, attempts, solved, created_at FROM scores WHERE word_id = $1 ORDER BY attempts ASC
+const unassignDate = `-- name: UnassignDate :exec
+DELETE FROM daily_stages WHERE date = $1
 `
 
-func (q *Queries) GetScoresByWord(ctx context.Context, wordID int32) ([]Score, error) {
-	rows, err := q.db.Query(ctx, getScoresByWord, wordID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Score
-	for rows.Next() {
-		var i Score
-		if err := rows.Scan(
-			&i.ID,
-			&i.PlayerName,
-			&i.WordID,
-			&i.Attempts,
-			&i.Solved,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) UnassignDate(ctx context.Context, date pgtype.Date) error {
+	_, err := q.db.Exec(ctx, unassignDate, date)
+	return err
 }
 
-const getTodayWord = `-- name: GetTodayWord :one
-SELECT id, word, date FROM words WHERE date = CURRENT_DATE
+const updateStage = `-- name: UpdateStage :one
+UPDATE stages SET name = $2, data = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, data, created_at, updated_at
 `
 
-func (q *Queries) GetTodayWord(ctx context.Context) (Word, error) {
-	row := q.db.QueryRow(ctx, getTodayWord)
-	var i Word
-	err := row.Scan(&i.ID, &i.Word, &i.Date)
+type UpdateStageParams struct {
+	ID   int32  `json:"id"`
+	Name string `json:"name"`
+	Data []byte `json:"data"`
+}
+
+func (q *Queries) UpdateStage(ctx context.Context, arg UpdateStageParams) (Stage, error) {
+	row := q.db.QueryRow(ctx, updateStage, arg.ID, arg.Name, arg.Data)
+	var i Stage
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Data,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
 	return i, err
-}
-
-const getWordByDate = `-- name: GetWordByDate :one
-SELECT id, word, date FROM words WHERE date = $1
-`
-
-func (q *Queries) GetWordByDate(ctx context.Context, date pgtype.Date) (Word, error) {
-	row := q.db.QueryRow(ctx, getWordByDate, date)
-	var i Word
-	err := row.Scan(&i.ID, &i.Word, &i.Date)
-	return i, err
-}
-
-const listWords = `-- name: ListWords :many
-SELECT id, word, date FROM words ORDER BY date DESC
-`
-
-func (q *Queries) ListWords(ctx context.Context) ([]Word, error) {
-	rows, err := q.db.Query(ctx, listWords)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Word
-	for rows.Next() {
-		var i Word
-		if err := rows.Scan(&i.ID, &i.Word, &i.Date); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

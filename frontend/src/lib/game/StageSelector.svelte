@@ -20,7 +20,7 @@ function handleSelect(index: number, event: MouseEvent) {
 <div class="stage-selector">
 	<div class="dropdown">
 		<div tabindex="-1" role="button" class="btn btn-sm btn-ghost">
-			{stages[selectedIndex].name}
+			{stages[selectedIndex].name ?? stages[selectedIndex].id}
 		</div>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-10 w-56 p-2 shadow">
@@ -31,7 +31,7 @@ function handleSelect(index: number, event: MouseEvent) {
 						class:active={i === selectedIndex}
 						onclick={(e) => handleSelect(i, e)}
 					>
-						{stage.name}
+						{stage.name ?? stage.id}
 					</button>
 				</li>
 			{/each}

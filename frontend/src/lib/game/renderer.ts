@@ -11,7 +11,7 @@ import {
 	Tile,
 } from "./types";
 
-const COLOR_BG = "#1a1a2e";
+export const COLOR_BG = "#1a1a2e";
 const COLOR_BLOCK = "#555568";
 const COLOR_SPIKE = "#e23636";
 const COLOR_PLAYER = "#e23636";
@@ -19,6 +19,64 @@ const COLOR_SAVE_INACTIVE = "#666633";
 const COLOR_SAVE_ACTIVE = "#ffdd33";
 const COLOR_GOAL = "#33ff66";
 const COLOR_HUD = "#ffffff";
+const COLOR_PLAYER_START = "#33aaff";
+
+export interface DrawTileOptions {
+	saveActive?: boolean;
+}
+
+export function drawTile(
+	ctx: CanvasRenderingContext2D,
+	tile: Tile,
+	x: number,
+	y: number,
+	options?: DrawTileOptions,
+): void {
+	switch (tile) {
+		case Tile.Block:
+			ctx.fillStyle = COLOR_BLOCK;
+			ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+			ctx.strokeStyle = "#44445a";
+			ctx.lineWidth = 1;
+			ctx.strokeRect(x + 0.5, y + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
+			break;
+
+		case Tile.SpikeUp:
+			drawSpike(ctx, x, y, "up");
+			break;
+		case Tile.SpikeDown:
+			drawSpike(ctx, x, y, "down");
+			break;
+		case Tile.SpikeLeft:
+			drawSpike(ctx, x, y, "left");
+			break;
+		case Tile.SpikeRight:
+			drawSpike(ctx, x, y, "right");
+			break;
+
+		case Tile.Save: {
+			const active = options?.saveActive ?? false;
+			ctx.fillStyle = active ? COLOR_SAVE_ACTIVE : COLOR_SAVE_INACTIVE;
+			const pad = 8;
+			ctx.fillRect(x + pad, y + pad, TILE_SIZE - pad * 2, TILE_SIZE - pad * 2);
+			break;
+		}
+
+		case Tile.Goal:
+			ctx.fillStyle = COLOR_GOAL;
+			ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+			break;
+
+		case Tile.PlayerStart: {
+			const prevAlpha = ctx.globalAlpha;
+			ctx.fillStyle = COLOR_PLAYER_START;
+			ctx.globalAlpha = prevAlpha * 0.5;
+			ctx.fillRect(x + 8, y + 4, TILE_SIZE - 16, TILE_SIZE - 8);
+			ctx.globalAlpha = prevAlpha;
+			break;
+		}
+	}
+}
 
 export function render(ctx: CanvasRenderingContext2D, state: GameState, level: Level): void {
 	// Clear
@@ -32,42 +90,10 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, level: L
 			const x = col * TILE_SIZE;
 			const y = row * TILE_SIZE;
 
-			switch (tile) {
-				case Tile.Block:
-					ctx.fillStyle = COLOR_BLOCK;
-					ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-					// Border for visual clarity
-					ctx.strokeStyle = "#44445a";
-					ctx.lineWidth = 1;
-					ctx.strokeRect(x + 0.5, y + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
-					break;
-
-				case Tile.SpikeUp:
-					drawSpike(ctx, x, y, "up");
-					break;
-				case Tile.SpikeDown:
-					drawSpike(ctx, x, y, "down");
-					break;
-				case Tile.SpikeLeft:
-					drawSpike(ctx, x, y, "left");
-					break;
-				case Tile.SpikeRight:
-					drawSpike(ctx, x, y, "right");
-					break;
-
-				case Tile.Save: {
-					const key = `${col},${row}`;
-					const active = state.activeSaves.has(key);
-					ctx.fillStyle = active ? COLOR_SAVE_ACTIVE : COLOR_SAVE_INACTIVE;
-					const pad = 8;
-					ctx.fillRect(x + pad, y + pad, TILE_SIZE - pad * 2, TILE_SIZE - pad * 2);
-					break;
-				}
-
-				case Tile.Goal:
-					ctx.fillStyle = COLOR_GOAL;
-					ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
-					break;
+			if (tile === Tile.Save) {
+				drawTile(ctx, tile, x, y, { saveActive: state.activeSaves.has(`${col},${row}`) });
+			} else {
+				drawTile(ctx, tile, x, y);
 			}
 		}
 	}

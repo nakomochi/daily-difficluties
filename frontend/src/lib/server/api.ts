@@ -10,7 +10,6 @@ export function apiKey(): string {
 
 export async function proxyToBackend(
 	path: string,
-	fetchFn: typeof fetch,
 	init?: RequestInit,
 ): Promise<Response> {
 	const headers: Record<string, string> = {
@@ -19,18 +18,25 @@ export async function proxyToBackend(
 	if (init?.body) {
 		headers["Content-Type"] = "application/json";
 	}
-	const res = await fetchFn(`${apiUrl()}${path}`, { ...init, headers });
-	return new Response(res.body, {
-		status: res.status,
-		headers: { "Content-Type": "application/json" },
-	});
+	const url = `${apiUrl()}${path}`;
+	try {
+		const res = await globalThis.fetch(url, { ...init, headers });
+		return new Response(res.body, {
+			status: res.status,
+			headers: { "Content-Type": "application/json" },
+		});
+	} catch (e) {
+		console.error(`proxyToBackend failed: ${init?.method ?? "GET"} ${url}`, e);
+		return new Response(JSON.stringify({ error: "Backend unreachable" }), {
+			status: 502,
+			headers: { "Content-Type": "application/json" },
+		});
+	}
 }
 
-export async function loadStageList(
-	fetchFn: typeof fetch,
-): Promise<{ id: number; name: string }[]> {
+export async function loadStageList(): Promise<{ id: number; name: string }[]> {
 	try {
-		const res = await fetchFn(`${apiUrl()}/api/stages`);
+		const res = await globalThis.fetch(`${apiUrl()}/api/stages`);
 		if (!res.ok) return [];
 		return await res.json();
 	} catch {
@@ -44,9 +50,9 @@ export interface ScheduleEntry {
 	name: string;
 }
 
-export async function loadSchedule(fetchFn: typeof fetch): Promise<ScheduleEntry[]> {
+export async function loadSchedule(): Promise<ScheduleEntry[]> {
 	try {
-		const res = await fetchFn(`${apiUrl()}/api/schedule`);
+		const res = await globalThis.fetch(`${apiUrl()}/api/schedule`);
 		if (!res.ok) return [];
 		return await res.json();
 	} catch {

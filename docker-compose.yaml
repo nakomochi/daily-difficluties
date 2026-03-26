@@ -31,6 +31,7 @@ services:
       SERVICE_FQDN_FRONTEND_3000: ""
       API_URL: http://backend:8080
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-secret-key}
+      DISABLE_DEV_ROUTES: "true"
     depends_on:
       - backend
 

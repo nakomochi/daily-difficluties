@@ -9,7 +9,7 @@ export interface DayRecord {
 }
 
 export function formatTime(ms: number): string {
-	return (ms / 1000).toFixed(1) + "s";
+	return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function key(date: string): string {
@@ -26,11 +26,7 @@ export function getRecord(date: string): DayRecord | null {
 	}
 }
 
-export function saveRecord(
-	date: string,
-	time: number,
-	deaths: number,
-): { isNewBest: boolean } {
+export function saveRecord(date: string, time: number, deaths: number): { isNewBest: boolean } {
 	const existing = getRecord(date) ?? { first: null, best: null };
 
 	if (!existing.first) {

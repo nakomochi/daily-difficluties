@@ -92,6 +92,7 @@ export class Input {
 		this.justPressed.clear();
 		this.virtualKeys.delete("jumpPressed");
 		this.virtualKeys.delete("shootPressed");
+		this.virtualKeys.delete("restart");
 	}
 
 	setVirtualKey(key: keyof InputState, pressed: boolean): void {

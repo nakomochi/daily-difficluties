@@ -1,12 +1,16 @@
 <script lang="ts">
 import { formatTime } from "./records";
+import ShareButton from "./ShareButton.svelte";
+import { shareResult } from "./share";
 
 let {
+	date,
 	time,
 	deaths,
 	isNewBest,
 	onRestart,
 }: {
+	date: string;
 	time: number;
 	deaths: number;
 	isNewBest: boolean;
@@ -34,10 +38,12 @@ let {
 				</div>
 			</div>
 
-			<button class="btn btn-primary mt-4 w-full" onclick={onRestart}>
-				RESTART
-			</button>
-			<p class="text-base-content/40 text-xs">or press R</p>
+			<div class="mt-4 flex w-full gap-2">
+				<button class="btn btn-primary flex-1" onclick={onRestart}>
+					RESTART
+				</button>
+				<ShareButton onclick={() => shareResult(date, time, deaths)} disabled={!date} />
+			</div>
 		</div>
 	</div>
 </div>

@@ -18,7 +18,7 @@ export interface EngineOptions {
 
 export class Engine {
 	private ctx: CanvasRenderingContext2D;
-	private input: Input;
+	readonly input: Input;
 	private level: Level;
 	private state: GameState;
 	private accumulator = 0;

@@ -108,7 +108,6 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, level: L
 
 	// HUD
 	drawHud(ctx, state);
-
 }
 
 function drawSpike(
@@ -156,4 +155,3 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
 	ctx.fillText(`Deaths: ${state.deaths}`, 8, 16);
 	ctx.fillText(`Time: ${seconds}s`, 8, 32);
 }
-

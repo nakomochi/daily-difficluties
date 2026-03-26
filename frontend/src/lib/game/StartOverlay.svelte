@@ -1,6 +1,8 @@
 <script lang="ts">
 import { browser } from "$app/environment";
-import { formatTime, getRecord, type DayRecord } from "./records";
+import { type DayRecord, formatTime, getRecord } from "./records";
+import ShareButton from "./ShareButton.svelte";
+import { shareResult } from "./share";
 
 let { date, onStart }: { date: string; onStart: () => void } = $props();
 
@@ -31,9 +33,12 @@ let record: DayRecord | null = $derived(browser ? getRecord(date) : null);
 				<p>R : Restart</p>
 			</div>
 
-			<button class="btn btn-primary mt-4 w-full" onclick={onStart}>
-				START
-			</button>
+			<div class="mt-4 flex w-full gap-2">
+				<button type="button" class="btn btn-primary flex-1" onclick={onStart}>
+					START
+				</button>
+				<ShareButton onclick={() => shareResult(date, record!.first!.time, record!.first!.deaths)} disabled={!record?.first} />
+			</div>
 		</div>
 	</div>
 </div>

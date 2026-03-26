@@ -1,11 +1,12 @@
 <script lang="ts">
-import { browser } from "$app/environment";
 import { onMount } from "svelte";
+import { browser } from "$app/environment";
 import { Engine, type EngineOptions, type FrameInfo } from "./engine";
-import { getRecord, saveRecord, type DayRecord } from "./records";
 import ResultOverlay from "./ResultOverlay.svelte";
+import { type DayRecord, getRecord, saveRecord } from "./records";
 import SidePanel from "./SidePanel.svelte";
 import StartOverlay from "./StartOverlay.svelte";
+import TouchControls from "./TouchControls.svelte";
 import { SCREEN_HEIGHT, SCREEN_WIDTH, type StageData } from "./types";
 
 let {
@@ -27,6 +28,8 @@ let gameKey = $state(0);
 let frameInfo: FrameInfo = $state({ deaths: 0, elapsedMs: 0, cleared: false });
 let lastFrameSnapshot = { deaths: 0, elapsedMs: 0, cleared: false };
 let record: DayRecord | null = $state(initRecord());
+let engine: Engine | null = $state(null);
+let isTouchDevice = $state(false);
 
 function initRecord(): DayRecord | null {
 	return browser && date ? getRecord(date) : null;
@@ -65,6 +68,8 @@ function handleRestart() {
 }
 
 onMount(() => {
+	isTouchDevice = matchMedia("(pointer: coarse)").matches;
+
 	const observer = new ResizeObserver(updateScale);
 	observer.observe(canvasArea);
 
@@ -96,13 +101,17 @@ $effect(() => {
 		},
 	};
 	const e = new Engine(canvas, stageData, options);
+	engine = e;
 	updateScale();
 	if (started || !showStartScreen) {
 		e.start();
 	} else {
 		e.renderOnce();
 	}
-	return () => e.stop();
+	return () => {
+		e.stop();
+		engine = null;
+	};
 });
 </script>
 
@@ -124,11 +133,15 @@ $effect(() => {
 		{/if}
 		{#if clearResult}
 			<ResultOverlay
+				{date}
 				time={clearResult.time}
 				deaths={clearResult.deaths}
 				isNewBest={clearResult.isNewBest}
 				onRestart={handleRestart}
 			/>
+		{/if}
+		{#if isTouchDevice && (started || !showStartScreen) && !clearResult}
+			<TouchControls input={engine?.input ?? null} />
 		{/if}
 	</div>
 </div>

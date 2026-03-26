@@ -109,10 +109,6 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, level: L
 	// HUD
 	drawHud(ctx, state);
 
-	// Clear screen overlay
-	if (state.cleared) {
-		drawClearOverlay(ctx, state);
-	}
 }
 
 function drawSpike(
@@ -161,21 +157,3 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
 	ctx.fillText(`Time: ${seconds}s`, 8, 32);
 }
 
-function drawClearOverlay(ctx: CanvasRenderingContext2D, state: GameState): void {
-	ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-	ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-
-	ctx.fillStyle = COLOR_GOAL;
-	ctx.font = "bold 48px monospace";
-	ctx.textAlign = "center";
-	ctx.fillText("CLEAR!", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 40);
-
-	ctx.fillStyle = COLOR_HUD;
-	ctx.font = "24px monospace";
-	const time = (state.clearTime / 1000).toFixed(1);
-	ctx.fillText(`Deaths: ${state.deaths}`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 10);
-	ctx.fillText(`Time: ${time}s`, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 40);
-
-	ctx.font = "16px monospace";
-	ctx.fillText("Press R to restart", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 80);
-}

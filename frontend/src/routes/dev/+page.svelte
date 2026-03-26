@@ -44,8 +44,9 @@ function currentLabel(): string {
 		const s = STAGES[source.index];
 		return s?.name ?? s?.id ?? "Local";
 	}
-	const db = data.dbStages.find((s: { id: number }) => s.id === source.id);
-	return db?.name || `DB #${source.id}`;
+	const dbId = source.id;
+	const db = data.dbStages.find((s: { id: number }) => s.id === dbId);
+	return db?.name || `DB #${dbId}`;
 }
 </script>
 

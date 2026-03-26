@@ -5,7 +5,7 @@ let { data } = $props();
 </script>
 
 {#if data.stage}
-	<Game stageData={data.stage.data} />
+	<Game stageData={data.stage.data} date={data.date} />
 {:else}
 	<div class="no-stage">
 		<p>本日のステージはまだ設定されていません</p>
